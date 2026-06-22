@@ -213,6 +213,80 @@
             linkElement.href = fullUrl;
             linkElement.textContent = fullUrl;
         }
+
+        // ------- 新增歌曲表單功能（前端） -------
+        function extractYouTubeId(input) {
+            if (!input) return '';
+            // 直接為 ID
+            if (/^[a-zA-Z0-9_-]{11}$/.test(input)) return input;
+            // 嘗試從完整網址擷取 v= 或短網址
+            try {
+                const url = new URL(input);
+                if (url.searchParams.has('v')) return url.searchParams.get('v');
+                // youtu.be 短網址
+                if (url.hostname.includes('youtu.be')) return url.pathname.slice(1);
+            } catch (e) {
+                // not a URL
+            }
+            return '';
+        }
+
+        // 建立表單 UI
+        const controls = document.querySelector('.controls');
+        const formWrap = document.createElement('div');
+        formWrap.style.width = '100%';
+        formWrap.style.marginTop = '12px';
+        formWrap.innerHTML = `
+            <div style="text-align:left; background:rgba(255,255,255,0.03); padding:12px; border-radius:8px;">
+                <h3 style="margin:0 0 8px 0; font-size:1rem;">新增歌曲到公開清單</h3>
+                <label style="display:block; margin-bottom:6px; font-size:0.9rem">YouTube 連結或 ID</label>
+                <input id="add-input-url" type="text" placeholder="https://youtu.be/... 或 影片ID" style="width:100%; padding:8px; border-radius:6px; border:1px solid rgba(255,255,255,0.06); margin-bottom:8px; background:transparent; color:inherit" />
+                <label style="display:block; margin-bottom:6px; font-size:0.9rem">歌曲名稱（選填）</label>
+                <input id="add-input-title" type="text" placeholder="歌曲名稱" style="width:100%; padding:8px; border-radius:6px; border:1px solid rgba(255,255,255,0.06); margin-bottom:8px; background:transparent; color:inherit" />
+                <label style="display:block; margin-bottom:6px; font-size:0.9rem">歌手（選填）</label>
+                <input id="add-input-artist" type="text" placeholder="歌手" style="width:100%; padding:8px; border-radius:6px; border:1px solid rgba(255,255,255,0.06); margin-bottom:8px; background:transparent; color:inherit" />
+                <div style="display:flex; gap:8px;">
+                    <button id="add-song-btn" style="flex:1; background:var(--accent-color); border:none; padding:10px; border-radius:8px; cursor:pointer; font-weight:600">新增歌曲</button>
+                    <div id="add-status" style="align-self:center; color:#aaa; font-size:0.9rem"></div>
+                </div>
+            </div>
+        `;
+        controls.appendChild(formWrap);
+
+        document.getElementById('add-song-btn').addEventListener('click', async () => {
+            const input = document.getElementById('add-input-url').value.trim();
+            const title = document.getElementById('add-input-title').value.trim();
+            const artist = document.getElementById('add-input-artist').value.trim();
+            const statusEl = document.getElementById('add-status');
+
+            const youtubeId = extractYouTubeId(input);
+            if (!youtubeId) {
+                statusEl.textContent = '請輸入有效的 YouTube 連結或影片 ID。';
+                return;
+            }
+
+            const payload = { id: youtubeId, title, artist };
+
+            try {
+                statusEl.textContent = '送出中...';
+                const resp = await fetch('/add-song', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    statusEl.textContent = '已送出！謝謝你的貢獻。';
+                    // 可選：將 ID 加入本地播放清單
+                    if (!musicPlaylist.includes(youtubeId)) musicPlaylist.push(youtubeId);
+                } else {
+                    statusEl.textContent = '送出失敗：' + (data && data.error ? data.error : resp.statusText);
+                }
+            } catch (e) {
+                statusEl.textContent = '送出發生錯誤：' + e.toString();
+            }
+            setTimeout(() => { statusEl.textContent = ''; }, 5000);
+        });
     </script>
 </body>
 </html>
